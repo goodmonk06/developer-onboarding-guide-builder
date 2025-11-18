@@ -13,24 +13,99 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TeamMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum TeamMemberStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum GuideStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuestProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+  SKIPPED
+}
+
+enum NotificationType {
+  GUIDE_GENERATED
+  QUEST_ASSIGNED
+  QUEST_COMPLETED
+  MEMBER_JOINED
+  MEMBER_LEFT
+  SYSTEM_ALERT
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model TeamSpace {
   id          String   @id @default(cuid())
   name        String
   description String?
+  slug        String   @unique
+  metadataJson String? @db.Text // Additional flexible metadata
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  repos   RepoLink[]
-  guides  OnboardingGuide[]
+  repos          RepoLink[]
+  guides         OnboardingGuide[]
+  members        TeamMember[]
+  notifications  Notification[]
+  questTemplates QuestTemplate[]
 
   @@map("team_spaces")
+}
+
+model TeamMember {
+  id        String           @id @default(cuid())
+  teamId    String
+  email     String
+  name      String
+  role      TeamMemberRole   @default(MEMBER)
+  status    TeamMemberStatus @default(ACTIVE)
+  avatarUrl String?
+  title     String? // Job title
+  startDate DateTime?
+  metadataJson String? @db.Text
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  team              TeamSpace       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  questProgress     QuestProgress[]
+  notifications     Notification[]
+  sentNotifications Notification[]  @relation("NotificationSender")
+
+  @@unique([teamId, email])
+  @@map("team_members")
 }
 
 model RepoLink {
   id        String   @id @default(cuid())
   teamId    String
   githubUrl String
-  role      String   // api, frontend, backend, etc
+  role      String // api, frontend, backend, etc
+  isActive  Boolean  @default(true)
+  lastAnalyzedAt DateTime?
+  analysisDataJson String? @db.Text // Cache analysis results
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -40,31 +115,130 @@ model RepoLink {
 }
 
 model OnboardingGuide {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   teamId       String
   title        String
-  targetRole   String   // junior, senior, ops, etc
-  markdownBody String   @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  targetRole   String // junior, senior, ops, etc
+  status       GuideStatus @default(DRAFT)
+  markdownBody String      @db.Text
+  version      Int         @default(1)
+  isTemplate   Boolean     @default(false)
+  estimatedDays Int        @default(14)
+  metadataJson String?     @db.Text
+  publishedAt  DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  team   TeamSpace @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  quests Quest[]
+  team     TeamSpace      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  quests   Quest[]
+  versions GuideVersion[]
 
   @@map("onboarding_guides")
 }
 
+model GuideVersion {
+  id           String   @id @default(cuid())
+  guideId      String
+  version      Int
+  title        String
+  markdownBody String   @db.Text
+  changeNotes  String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  guide OnboardingGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, version])
+  @@map("guide_versions")
+}
+
 model Quest {
   id                  String   @id @default(cuid())
-  guideId             String
+  guideId             String?
+  templateId          String?
   title               String
   descriptionMarkdown String   @db.Text
   estimatedHours      Int
   tagsJson            String   @db.Text // Store as JSON string
+  difficulty          String   @default("intermediate") // beginner, intermediate, advanced
+  prerequisitesJson   String?  @db.Text // Quest IDs that should be completed first
+  resourcesJson       String?  @db.Text // External links, docs, videos
+  order               Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  guide OnboardingGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  guide     OnboardingGuide? @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  template  QuestTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  progress  QuestProgress[]
 
   @@map("quests")
+}
+
+model QuestTemplate {
+  id                  String   @id @default(cuid())
+  teamId              String?
+  title               String
+  descriptionMarkdown String   @db.Text
+  estimatedHours      Int
+  tagsJson            String   @db.Text
+  difficulty          String   @default("intermediate")
+  category            String // setup, coding, testing, deployment, etc
+  isPublic            Boolean  @default(false)
+  usageCount          Int      @default(0)
+  metadataJson        String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  team   TeamSpace? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  quests Quest[]
+
+  @@map("quest_templates")
+}
+
+model QuestProgress {
+  id              String              @id @default(cuid())
+  questId         String
+  memberId        String
+  status          QuestProgressStatus @default(NOT_STARTED)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  timeSpentMinutes Int                @default(0)
+  notes           String?             @db.Text
+  feedbackRating  Int? // 1-5 rating
+  feedbackText    String?             @db.Text
+  blockers        String?             @db.Text
+  metadataJson    String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  quest  Quest      @relation(fields: [questId], references: [id], onDelete: Cascade)
+  member TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([questId, memberId])
+  @@map("quest_progress")
+}
+
+model Notification {
+  id            String               @id @default(cuid())
+  teamId        String?
+  recipientId   String?
+  senderId      String?
+  type          NotificationType
+  priority      NotificationPriority @default(MEDIUM)
+  title         String
+  message       String               @db.Text
+  linkUrl       String?
+  isRead        Boolean              @default(false)
+  readAt        DateTime?
+  metadataJson  String?              @db.Text
+  expiresAt     DateTime?
+  createdAt     DateTime             @default(now())
+
+  team      TeamSpace?  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  recipient TeamMember? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  sender    TeamMember? @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, isRead])
+  @@index([teamId, createdAt])
+  @@map("notifications")
 }

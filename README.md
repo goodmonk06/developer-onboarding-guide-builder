@@ -11,7 +11,7 @@ This tool helps engineering teams create comprehensive, AI-powered onboarding ex
 - Repository insights extracted from READMEs, code structure, and dependencies
 - Role-specific content that adapts to the new developer's experience level
 
-**Status**: Phase 2 - Working vertical slice with Docker, tests, and seed data
+**Status**: Phase 3 - Production-ready with progress tracking, templates, analytics, and comprehensive tooling
 
 ## Tech Stack
 
@@ -25,24 +25,98 @@ This tool helps engineering teams create comprehensive, AI-powered onboarding ex
 
 ## Domain Model
 
-The system uses four core entities:
+The system uses a rich domain model with 10 core entities:
 
 ```
 TeamSpace
-├── id, name, description
-├── repos[] ────> RepoLink (githubUrl, role)
-└── guides[] ───> OnboardingGuide
-                  ├── id, title, targetRole, markdownBody
-                  └── quests[] ───> Quest
-                                    ├── id, title, descriptionMarkdown
-                                    ├── estimatedHours
-                                    └── tagsJson
+├── id, name, slug, description
+├── members[] ──────> TeamMember
+│                     ├── email, name, role, status
+│                     ├── title, avatarUrl, githubUsername
+│                     └── progress[] ──> QuestProgress
+├── repos[] ────────> RepoLink (githubUrl, role)
+├── guides[] ───────> OnboardingGuide
+│                     ├── id, title, targetRole, status
+│                     ├── markdownBody, estimatedDays
+│                     ├── publishedAt, archivedAt
+│                     ├── quests[] ───> Quest
+│                     │                 ├── title, description
+│                     │                 ├── estimatedHours, orderIndex
+│                     │                 ├── prerequisiteIds
+│                     │                 ├── tags[]
+│                     │                 ├── templateId (optional)
+│                     │                 └── progress[] ──> QuestProgress
+│                     └── versions[] ─> GuideVersion
+├── templates[] ────> QuestTemplate
+│                     ├── title, category, difficulty
+│                     ├── isPublic, usageCount
+│                     └── metadataJson
+└── notifications[] ─> Notification
+                      ├── type, priority, channels[]
+                      └── message, isRead, readAt
 ```
 
-**Relationships:**
-- A `TeamSpace` organizes multiple GitHub `RepoLink`s
-- Each `OnboardingGuide` belongs to a team and contains multiple `Quest`s
-- Quests are actionable learning tasks with time estimates and tags
+**Key Relationships:**
+- **Team Members**: Track individuals with roles (OWNER, ADMIN, MEMBER, VIEWER) and status (ACTIVE, INVITED, INACTIVE)
+- **Quest Progress**: Members track completion status, time spent, feedback ratings, and blockers
+- **Templates**: Reusable quest templates (public or team-specific) with usage tracking
+- **Versioning**: Guide versions support iterative improvements and rollback
+- **Notifications**: Multi-channel notifications (in-app, email, Slack) with priority levels
+
+## Phase 3 Features
+
+### Team Member Management
+- Add team members with customizable roles and permissions
+- Track member status (active, invited, inactive)
+- Associate members with GitHub profiles
+- Per-member quest progress tracking
+
+### Quest Progress Tracking
+- **Status tracking**: NOT_STARTED, IN_PROGRESS, COMPLETED, BLOCKED, SKIPPED
+- **Time tracking**: Log actual time spent vs. estimated hours
+- **Feedback system**: 5-star ratings and text feedback on completed quests
+- **Blocker management**: Document blockers when quests are stuck
+- **Notes**: Add contextual notes for each quest attempt
+
+### Quest Templates
+- **Public templates**: Shared across all teams for common onboarding tasks
+- **Private templates**: Team-specific templates for internal processes
+- **Usage tracking**: Monitor which templates are most popular
+- **Categories**: technical-setup, technical-deep-dive, domain-knowledge, team-process, soft-skills
+- **Difficulty levels**: beginner, intermediate, advanced
+- **Metadata support**: Extensible JSON metadata for custom properties
+
+### Domain Events & Analytics
+- **Event system**: Typed domain events for cross-cutting concerns
+  - Team events: created, updated, deleted
+  - Member events: joined, left, role_changed
+  - Guide events: generated, published, archived
+  - Quest events: assigned, started, completed, blocked
+  - Template events: created, used
+- **Analytics tracking**: Quest completion rates, time efficiency, feedback analysis
+- **Event handlers**: Pluggable handlers for notifications, integrations, auditing
+
+### Notification System
+- **Multi-channel support**: In-app, email, Slack (extensible)
+- **Priority levels**: low, medium, high, urgent
+- **Read tracking**: Track when notifications are viewed
+- **Notification types**: quest_assigned, quest_completed, member_joined, etc.
+
+### CLI Management Tools
+Comprehensive CLI for database operations:
+- `npm run cli stats` - Show database statistics
+- `npm run cli teams:list` - List all teams
+- `npm run cli teams:create -- -n "Team Name"` - Create new team
+- `npm run cli members:create -- -t TEAM_ID -e email@example.com -n "Name"` - Add member
+- `npm run cli progress:report` - Onboarding progress summary
+- `npm run cli analytics:completion` - Quest completion analytics
+- `npm run cli clean:stale` - Clean archived guides older than 6 months
+
+### Extensibility & Adapters
+- **Notification adapters**: Email, Slack, webhook integrations
+- **Analytics adapters**: Track events, metrics, timing
+- **Structured logging**: Contextual logging with correlation IDs
+- **Utility functions**: Slug generation, time formatting, retry logic
 
 ## Getting Started
 
@@ -103,7 +177,7 @@ Run the test suite to verify everything works:
 npm test
 ```
 
-All tests should pass (17 passing tests).
+Unit tests and event system tests should pass (36+ passing tests). Integration tests require a running PostgreSQL database.
 
 ## Example Flow - Complete Vertical Slice
 
@@ -246,12 +320,16 @@ This guide includes 5 quests:
 | `npm run dev` | Start development server (http://localhost:3000) |
 | `npm run build` | Build for production |
 | `npm start` | Start production server |
-| `npm test` | Run test suite |
+| `npm test` | Run test suite (unit + integration) |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:ui` | Open Vitest UI |
 | `npm run lint` | Run ESLint |
 | `npm run type-check` | Run TypeScript type checking |
+| `npm run cli` | Run CLI management tool (see `npm run cli -- --help`) |
 | `npm run db:push` | Push Prisma schema to database |
 | `npm run db:migrate` | Create migration from schema changes |
-| `npm run db:seed` | Seed database with example data |
+| `npm run db:seed` | Seed database with Phase 3 example data |
+| `npm run db:reset` | Reset database (migrate + seed) |
 | `npm run db:studio` | Open Prisma Studio (database GUI) |
 | `npm run docker:dev` | Start PostgreSQL in Docker |
 | `npm run docker:dev:down` | Stop PostgreSQL container |
@@ -313,10 +391,27 @@ model Quest {
 - Returns structured JSON with guides and quests
 
 ### API Layer (`app/api/`)
-- RESTful endpoints with consistent error handling
-- Input validation using Zod schemas
-- Centralized error responses (`lib/api-response.ts`)
-- Database operations via Prisma
+- **RESTful endpoints** with consistent error handling
+- **Input validation** using Zod schemas
+- **Centralized error responses** (`lib/api-response.ts`)
+- **Database operations** via Prisma
+- **Phase 3 endpoints**:
+  - `/api/teams/[id]/members` - Team member management
+  - `/api/members/[id]` - Individual member operations
+  - `/api/quests/[id]/progress` - Quest progress tracking
+  - `/api/templates` - Quest template CRUD operations
+
+### Domain Events & Analytics (`lib/events.ts`, `lib/adapters/`)
+- **Event Bus**: Typed domain events with async handlers
+- **Notification Adapters**: Email, Slack, in-memory implementations
+- **Analytics Adapters**: Track events, metrics, counters, timing
+- **Structured Logging** (`lib/logger.ts`): Contextual logging with levels
+
+### CLI Tools (`scripts/cli.ts`)
+- **Commander-based** CLI for database operations
+- **Stats & Reporting**: Database statistics, progress reports
+- **Data Management**: Create teams/members, clean stale data
+- **Analytics**: Completion analytics, efficiency tracking
 
 ### UI Layer (`app/`)
 - Server and client components
@@ -335,10 +430,20 @@ npm run test:ui          # Open Vitest UI
 ```
 
 **Test Coverage:**
+
+*Unit Tests:*
 - API response utilities (error handling, success responses)
 - Data structure validation (guides, quests, repositories)
 - Zod schema validation
 - Prisma error handling
+
+*Integration Tests:*
+- Complete onboarding flow (team → member → guide → quest → progress)
+- Quest template system (create, use, track)
+- API endpoints (members, progress, templates, notifications)
+- Event system and analytics (event emission, handlers, tracking)
+
+See `tests/integration/README.md` for running integration tests with database.
 
 ## Deployment
 
@@ -370,18 +475,26 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 
 ## Future Extensions
 
-- [ ] **Quest Progress Tracking**: Track which quests team members have completed
-- [ ] **Team Member Accounts**: User authentication and role management
-- [ ] **Custom Quest Builder**: UI for manually creating and editing quests
+**Phase 3 Completed** ✅
+- [x] **Quest Progress Tracking**: Track which quests team members have completed
+- [x] **Team Member Accounts**: Role management (OWNER, ADMIN, MEMBER, VIEWER)
+- [x] **Quest Templates**: Reusable quest templates across teams
+- [x] **Onboarding Feedback**: Collect ratings and feedback from new developers
+- [x] **Analytics Dashboard**: Track onboarding completion rates and time
+- [x] **Integration Foundation**: Event system and notification adapters for Slack/email
+
+**Future Enhancements:**
+- [ ] **User Authentication**: OAuth/SSO integration for member login
+- [ ] **Custom Quest Builder UI**: Visual editor for manually creating quests
 - [ ] **Markdown Export**: Download guides as standalone markdown files
-- [ ] **Integration with Slack/Discord**: Notify team when onboarding milestones are reached
-- [ ] **Analytics Dashboard**: Track onboarding completion rates and time
+- [ ] **Real-time Notifications**: WebSocket support for live updates
 - [ ] **Multi-Repository Support**: Analyze monorepos with multiple workspaces
 - [ ] **GitLab & Bitbucket**: Support beyond GitHub
 - [ ] **AI Model Selection**: Support for Claude, Gemini, or local LLMs
-- [ ] **Quest Templates**: Reusable quest templates across teams
-- [ ] **Onboarding Feedback**: Collect feedback from new developers
 - [ ] **Automated Updates**: Re-generate guides when repos change significantly
+- [ ] **Guide Branching**: A/B test different onboarding approaches
+- [ ] **Mobile App**: React Native app for on-the-go quest tracking
+- [ ] **API Documentation**: OpenAPI/Swagger specs for external integrations
 
 ## Contributing
 
@@ -452,4 +565,11 @@ MIT License - see LICENSE file for details
 
 **Built with ❤️ for better developer onboarding**
 
-Phase 2 Complete ✅ - Working vertical slice with comprehensive testing and Docker support
+**Phase 3 Complete** ✅ - Production-ready with:
+- Team member management and role-based access
+- Quest progress tracking with feedback and blockers
+- Reusable quest templates (public & private)
+- Domain events and pluggable analytics
+- Multi-channel notification system
+- Comprehensive CLI management tools
+- Integration tests and comprehensive documentation

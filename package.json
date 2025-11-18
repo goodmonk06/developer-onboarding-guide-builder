@@ -26,6 +26,7 @@
   "dependencies": {
     "@octokit/rest": "^22.0.1",
     "@prisma/client": "^6.19.0",
+    "commander": "^14.0.2",
     "next": "16.0.3",
     "openai": "^6.9.1",
     "prisma": "^6.19.0",

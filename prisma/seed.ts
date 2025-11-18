@@ -1,49 +1,193 @@
 import { PrismaClient } from '@prisma/client'
+import { generateSlug } from '../lib/utils'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Starting database seed...')
+  console.log('🌱 Starting Phase 3 database seed...')
 
   // Clean existing data
   console.log('Cleaning existing data...')
+  await prisma.notification.deleteMany()
+  await prisma.questProgress.deleteMany()
   await prisma.quest.deleteMany()
+  await prisma.questTemplate.deleteMany()
+  await prisma.guideVersion.deleteMany()
   await prisma.onboardingGuide.deleteMany()
+  await prisma.teamMember.deleteMany()
   await prisma.repoLink.deleteMany()
   await prisma.teamSpace.deleteMany()
+
+  // Create Quest Templates (Public Templates)
+  console.log('Creating quest templates...')
+  const setupTemplate = await prisma.questTemplate.create({
+    data: {
+      title: 'Environment Setup',
+      descriptionMarkdown: `## Objective
+Set up your complete development environment
+
+## Steps
+1. Install required tools (Node.js, Docker, Git)
+2. Clone all team repositories
+3. Configure environment variables
+4. Run local services
+5. Verify everything works
+
+## Success Criteria
+- [ ] All tools installed
+- [ ] Services running locally
+- [ ] Tests passing`,
+      estimatedHours: 4,
+      tagsJson: JSON.stringify(['setup', 'environment', 'onboarding']),
+      difficulty: 'beginner',
+      category: 'setup',
+      isPublic: true,
+      usageCount: 15,
+    },
+  })
+
+  const testingTemplate = await prisma.questTemplate.create({
+    data: {
+      title: 'Write Your First Test',
+      descriptionMarkdown: `## Objective
+Learn testing practices and write your first test
+
+## Steps
+1. Review testing documentation
+2. Understand test structure
+3. Write a simple unit test
+4. Run test suite locally
+5. Submit for code review
+
+## Success Criteria
+- [ ] Test written and passing
+- [ ] Follows team conventions
+- [ ] Code reviewed and approved`,
+      estimatedHours: 3,
+      tagsJson: JSON.stringify(['testing', 'quality', 'tdd']),
+      difficulty: 'beginner',
+      category: 'testing',
+      isPublic: true,
+      usageCount: 22,
+    },
+  })
+
+  const deploymentTemplate = await prisma.questTemplate.create({
+    data: {
+      title: 'Deploy to Staging',
+      descriptionMarkdown: `## Objective
+Learn the deployment process and deploy your first change
+
+## Steps
+1. Review CI/CD pipeline documentation
+2. Create a small change
+3. Push to feature branch
+4. Monitor CI pipeline
+5. Deploy to staging
+6. Verify deployment
+
+## Success Criteria
+- [ ] Change deployed successfully
+- [ ] No errors in staging
+- [ ] Can access and verify change`,
+      estimatedHours: 2,
+      tagsJson: JSON.stringify(['deployment', 'devops', 'ci-cd']),
+      difficulty: 'intermediate',
+      category: 'deployment',
+      isPublic: true,
+      usageCount: 18,
+    },
+  })
 
   // Create Shift Scheduler Team
   console.log('Creating Shift Scheduler Team...')
   const shiftTeam = await prisma.teamSpace.create({
     data: {
       name: 'Shift Scheduler Team',
+      slug: generateSlug('Shift Scheduler Team'),
       description: 'Healthcare shift scheduling platform with microservices architecture',
       repos: {
         create: [
           {
             githubUrl: 'https://github.com/vercel/next.js',
             role: 'frontend',
+            isActive: true,
           },
           {
             githubUrl: 'https://github.com/prisma/prisma',
             role: 'backend',
+            isActive: true,
           },
           {
             githubUrl: 'https://github.com/openai/openai-node',
             role: 'api',
+            isActive: true,
           },
         ],
       },
     },
   })
 
-  // Create a sample onboarding guide for Junior Developer
-  console.log('Creating sample onboarding guide...')
+  // Create Team Members
+  console.log('Creating team members...')
+  const alice = await prisma.teamMember.create({
+    data: {
+      teamId: shiftTeam.id,
+      email: 'alice@example.com',
+      name: 'Alice Johnson',
+      role: 'OWNER',
+      status: 'ACTIVE',
+      title: 'Engineering Manager',
+      startDate: new Date('2022-01-15'),
+    },
+  })
+
+  const bob = await prisma.teamMember.create({
+    data: {
+      teamId: shiftTeam.id,
+      email: 'bob@example.com',
+      name: 'Bob Smith',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      title: 'Senior Software Engineer',
+      startDate: new Date('2022-06-01'),
+    },
+  })
+
+  const carol = await prisma.teamMember.create({
+    data: {
+      teamId: shiftTeam.id,
+      email: 'carol@example.com',
+      name: 'Carol Martinez',
+      role: 'MEMBER',
+      status: 'ACTIVE',
+      title: 'Software Engineer',
+      startDate: new Date('2024-01-10'),
+    },
+  })
+
+  const david = await prisma.teamMember.create({
+    data: {
+      teamId: shiftTeam.id,
+      email: 'david@example.com',
+      name: 'David Lee',
+      role: 'MEMBER',
+      status: 'ACTIVE',
+      title: 'Junior Software Engineer',
+      startDate: new Date('2024-11-01'),
+    },
+  })
+
+  // Create Onboarding Guide with PUBLISHED status
+  console.log('Creating onboarding guide...')
   const guide = await prisma.onboardingGuide.create({
     data: {
       teamId: shiftTeam.id,
       title: 'Junior Developer Onboarding - Shift Scheduler Team',
       targetRole: 'junior',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2024-10-01'),
+      estimatedDays: 14,
       markdownBody: `# Welcome to the Shift Scheduler Team!
 
 This guide will help you get up to speed with our healthcare shift scheduling platform over the next 2 weeks.
@@ -101,11 +245,19 @@ This guide will help you get up to speed with our healthcare shift scheduling pl
 
 Don't hesitate to reach out to your mentor or the team on Slack!
 `,
-      quests: {
-        create: [
-          {
-            title: 'Set Up Your Development Environment',
-            descriptionMarkdown: `## Objective
+    },
+  })
+
+  // Create Quests
+  console.log('Creating quests...')
+  const quest1 = await prisma.quest.create({
+    data: {
+      guideId: guide.id,
+      templateId: setupTemplate.id,
+      title: 'Set Up Your Development Environment',
+      order: 1,
+      difficulty: 'beginner',
+      descriptionMarkdown: `## Objective
 Get your local development environment fully configured and running.
 
 ## Steps
@@ -158,12 +310,23 @@ Get your local development environment fully configured and running.
 - [Development Environment Setup Guide](https://example.com/setup)
 - [Troubleshooting Common Issues](https://example.com/troubleshooting)
 `,
-            estimatedHours: 4,
-            tagsJson: JSON.stringify(['setup', 'environment', 'docker', 'onboarding']),
-          },
-          {
-            title: 'Understand the Shift Model',
-            descriptionMarkdown: `## Objective
+      estimatedHours: 4,
+      tagsJson: JSON.stringify(['setup', 'environment', 'docker', 'onboarding']),
+      resourcesJson: JSON.stringify([
+        { title: 'Node.js Installation', url: 'https://nodejs.org' },
+        { title: 'Docker Desktop', url: 'https://docker.com' },
+      ]),
+    },
+  })
+
+  const quest2 = await prisma.quest.create({
+    data: {
+      guideId: guide.id,
+      title: 'Understand the Shift Model',
+      order: 2,
+      difficulty: 'beginner',
+      prerequisitesJson: JSON.stringify([quest1.id]),
+      descriptionMarkdown: `## Objective
 Gain a deep understanding of the core Shift domain model and how it works in our system.
 
 ## Steps
@@ -223,12 +386,20 @@ Gain a deep understanding of the core Shift domain model and how it works in our
 - [Domain Model Documentation](https://example.com/domain-model)
 - [Prisma Schema Reference](https://www.prisma.io/docs/reference)
 `,
-            estimatedHours: 3,
-            tagsJson: JSON.stringify(['domain', 'backend', 'database', 'learning']),
-          },
-          {
-            title: 'Fix Your First Bug',
-            descriptionMarkdown: `## Objective
+      estimatedHours: 3,
+      tagsJson: JSON.stringify(['domain', 'backend', 'database', 'learning']),
+    },
+  })
+
+  const quest3 = await prisma.quest.create({
+    data: {
+      guideId: guide.id,
+      templateId: testingTemplate.id,
+      title: 'Fix Your First Bug',
+      order: 3,
+      difficulty: 'intermediate',
+      prerequisitesJson: JSON.stringify([quest1.id, quest2.id]),
+      descriptionMarkdown: `## Objective
 Find, fix, and submit a pull request for a real bug in the codebase.
 
 ## Steps
@@ -298,12 +469,18 @@ Find, fix, and submit a pull request for a real bug in the codebase.
 - [Git Workflow](https://example.com/git-workflow)
 - [Code Review Guide](https://example.com/code-review)
 `,
-            estimatedHours: 6,
-            tagsJson: JSON.stringify(['bug-fix', 'git', 'testing', 'code-review']),
-          },
-          {
-            title: 'Add a Small Feature to the UI',
-            descriptionMarkdown: `## Objective
+      estimatedHours: 6,
+      tagsJson: JSON.stringify(['bug-fix', 'git', 'testing', 'code-review']),
+    },
+  })
+
+  const quest4 = await prisma.quest.create({
+    data: {
+      guideId: guide.id,
+      title: 'Add a Small Feature to the UI',
+      order: 4,
+      difficulty: 'intermediate',
+      descriptionMarkdown: `## Objective
 Implement a small but complete feature in the frontend application.
 
 ## Feature: Shift Duration Display
@@ -372,12 +549,19 @@ Add a feature to display the shift duration (in hours) on shift cards.
 - [UI Component Library](https://example.com/components)
 - [Testing Frontend Code](https://example.com/frontend-testing)
 `,
-            estimatedHours: 5,
-            tagsJson: JSON.stringify(['frontend', 'feature', 'ui', 'testing']),
-          },
-          {
-            title: 'Learn the Deployment Process',
-            descriptionMarkdown: `## Objective
+      estimatedHours: 5,
+      tagsJson: JSON.stringify(['frontend', 'feature', 'ui', 'testing']),
+    },
+  })
+
+  const quest5 = await prisma.quest.create({
+    data: {
+      guideId: guide.id,
+      templateId: deploymentTemplate.id,
+      title: 'Learn the Deployment Process',
+      order: 5,
+      difficulty: 'intermediate',
+      descriptionMarkdown: `## Objective
 Understand how code gets from your machine to production.
 
 ## Steps
@@ -420,57 +604,279 @@ Understand how code gets from your machine to production.
 - [Monitoring Dashboard](https://example.com/monitoring)
 - [Incident Response Guide](https://example.com/incidents)
 `,
-            estimatedHours: 3,
-            tagsJson: JSON.stringify(['devops', 'deployment', 'ci-cd', 'monitoring']),
-          },
-        ],
-      },
-    },
-    include: {
-      quests: true,
+      estimatedHours: 3,
+      tagsJson: JSON.stringify(['devops', 'deployment', 'ci-cd', 'monitoring']),
     },
   })
 
-  console.log(`✅ Created guide: ${guide.title}`)
-  console.log(`   with ${guide.quests.length} quests`)
+  // Create Quest Progress for David (new joiner)
+  console.log('Creating quest progress...')
+  await prisma.questProgress.create({
+    data: {
+      questId: quest1.id,
+      memberId: david.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-11-01T09:00:00'),
+      completedAt: new Date('2024-11-01T15:30:00'),
+      timeSpentMinutes: 390,
+      feedbackRating: 5,
+      feedbackText: 'Great quest! Clear instructions and helpful resources.',
+      notes: 'Had some issues with Docker but mentor helped quickly.',
+    },
+  })
 
-  // Create E-commerce Team (second example)
+  await prisma.questProgress.create({
+    data: {
+      questId: quest2.id,
+      memberId: david.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-11-02T09:00:00'),
+      completedAt: new Date('2024-11-02T12:00:00'),
+      timeSpentMinutes: 180,
+      feedbackRating: 4,
+      feedbackText: 'Good documentation, test example was helpful.',
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest3.id,
+      memberId: david.id,
+      status: 'IN_PROGRESS',
+      startedAt: new Date('2024-11-04T10:00:00'),
+      timeSpentMinutes: 240,
+      notes: 'Working on fixing a validation bug in the shift creation form.',
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest4.id,
+      memberId: david.id,
+      status: 'NOT_STARTED',
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest5.id,
+      memberId: david.id,
+      status: 'NOT_STARTED',
+    },
+  })
+
+  // Create Progress for Carol (who's further along)
+  await prisma.questProgress.create({
+    data: {
+      questId: quest1.id,
+      memberId: carol.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-01-10T09:00:00'),
+      completedAt: new Date('2024-01-10T14:00:00'),
+      timeSpentMinutes: 300,
+      feedbackRating: 5,
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest2.id,
+      memberId: carol.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-01-11T09:00:00'),
+      completedAt: new Date('2024-01-11T11:30:00'),
+      timeSpentMinutes: 150,
+      feedbackRating: 4,
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest3.id,
+      memberId: carol.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-01-12T09:00:00'),
+      completedAt: new Date('2024-01-15T16:00:00'),
+      timeSpentMinutes: 480,
+      feedbackRating: 5,
+      feedbackText: 'Learned a lot from this! Code review was very educational.',
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest4.id,
+      memberId: carol.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-01-16T09:00:00'),
+      completedAt: new Date('2024-01-18T15:00:00'),
+      timeSpentMinutes: 420,
+      feedbackRating: 4,
+    },
+  })
+
+  await prisma.questProgress.create({
+    data: {
+      questId: quest5.id,
+      memberId: carol.id,
+      status: 'COMPLETED',
+      startedAt: new Date('2024-01-19T10:00:00'),
+      completedAt: new Date('2024-01-19T14:00:00'),
+      timeSpentMinutes: 240,
+      feedbackRating: 5,
+    },
+  })
+
+  // Create Notifications
+  console.log('Creating notifications...')
+  await prisma.notification.create({
+    data: {
+      teamId: shiftTeam.id,
+      recipientId: david.id,
+      senderId: alice.id,
+      type: 'MEMBER_JOINED',
+      priority: 'MEDIUM',
+      title: 'Welcome to the Team!',
+      message: 'Welcome to the Shift Scheduler Team, David! We\'re excited to have you here. Your onboarding guide is ready.',
+      linkUrl: `/guides/${guide.id}`,
+      isRead: true,
+      readAt: new Date('2024-11-01T09:05:00'),
+    },
+  })
+
+  await prisma.notification.create({
+    data: {
+      teamId: shiftTeam.id,
+      recipientId: david.id,
+      senderId: bob.id,
+      type: 'QUEST_COMPLETED',
+      priority: 'LOW',
+      title: 'Quest Completed: Set Up Your Development Environment',
+      message: 'Congratulations! You\'ve completed your first quest. Time to move on to understanding the shift model.',
+      linkUrl: `/quests/${quest2.id}`,
+      isRead: true,
+      readAt: new Date('2024-11-01T15:35:00'),
+    },
+  })
+
+  await prisma.notification.create({
+    data: {
+      teamId: shiftTeam.id,
+      recipientId: david.id,
+      type: 'QUEST_ASSIGNED',
+      priority: 'MEDIUM',
+      title: 'New Quest Available: Fix Your First Bug',
+      message: 'You\'ve been assigned a new quest. Ready to fix your first bug?',
+      linkUrl: `/quests/${quest3.id}`,
+      isRead: false,
+    },
+  })
+
+  await prisma.notification.create({
+    data: {
+      teamId: shiftTeam.id,
+      recipientId: alice.id,
+      type: 'SYSTEM_ALERT',
+      priority: 'HIGH',
+      title: 'New Team Member Onboarding Started',
+      message: 'David Lee has started their onboarding journey. Consider checking in after their first week.',
+      linkUrl: `/members/${david.id}`,
+      isRead: true,
+      readAt: new Date('2024-11-01T10:00:00'),
+    },
+  })
+
+  // Create E-commerce Team
   console.log('\nCreating E-commerce Platform Team...')
   const ecomTeam = await prisma.teamSpace.create({
     data: {
       name: 'E-commerce Platform Team',
+      slug: generateSlug('E-commerce Platform Team'),
       description: 'Modern e-commerce platform with inventory and order management',
       repos: {
         create: [
           {
             githubUrl: 'https://github.com/facebook/react',
             role: 'frontend',
+            isActive: true,
           },
           {
             githubUrl: 'https://github.com/nestjs/nest',
             role: 'backend',
+            isActive: true,
           },
         ],
       },
     },
   })
 
-  console.log(`✅ Created team: ${ecomTeam.name}`)
+  // Add a member to E-commerce team
+  const emma = await prisma.teamMember.create({
+    data: {
+      teamId: ecomTeam.id,
+      email: 'emma@example.com',
+      name: 'Emma Wilson',
+      role: 'OWNER',
+      status: 'ACTIVE',
+      title: 'Tech Lead',
+      startDate: new Date('2023-03-01'),
+    },
+  })
 
   // Summary
   console.log('\n' + '='.repeat(50))
-  console.log('🎉 Seed completed successfully!')
+  console.log('🎉 Phase 3 Seed completed successfully!')
   console.log('='.repeat(50))
+
+  const [teams, members, guides, quests, templates, progress, notifications] = await Promise.all([
+    prisma.teamSpace.count(),
+    prisma.teamMember.count(),
+    prisma.onboardingGuide.count(),
+    prisma.quest.count(),
+    prisma.questTemplate.count(),
+    prisma.questProgress.count(),
+    prisma.notification.count(),
+  ])
+
   console.log('\nCreated:')
-  console.log(`  - ${await prisma.teamSpace.count()} teams`)
+  console.log(`  - ${teams} teams`)
+  console.log(`  - ${members} team members`)
   console.log(`  - ${await prisma.repoLink.count()} repositories`)
-  console.log(`  - ${await prisma.onboardingGuide.count()} guides`)
-  console.log(`  - ${await prisma.quest.count()} quests`)
-  console.log('\nYou can now:')
-  console.log('  1. Start the app: npm run dev')
-  console.log('  2. Visit: http://localhost:3000')
-  console.log('  3. Go to /teams to see the seeded data')
-  console.log('  4. Explore the Shift Scheduler Team onboarding guide')
+  console.log(`  - ${guides} onboarding guides`)
+  console.log(`  - ${quests} quests`)
+  console.log(`  - ${templates} quest templates`)
+  console.log(`  - ${progress} progress records`)
+  console.log(`  - ${notifications} notifications`)
+
+  console.log('\n📚 Teams:')
+  console.log('  1. Shift Scheduler Team')
+  console.log('     - 4 members (Alice, Bob, Carol, David)')
+  console.log('     - 1 complete onboarding guide with 5 quests')
+  console.log('     - Progress tracking for 2 members')
+  console.log('     - 4 notifications')
+  console.log('  2. E-commerce Platform Team')
+  console.log('     - 1 member (Emma)')
+
+  console.log('\n✨ Quest Templates:')
+  console.log('  - Environment Setup (beginner, 15 uses)')
+  console.log('  - Write Your First Test (beginner, 22 uses)')
+  console.log('  - Deploy to Staging (intermediate, 18 uses)')
+
+  console.log('\n👤 Demo Accounts:')
+  console.log('  - alice@example.com (Owner, Engineering Manager)')
+  console.log('  - bob@example.com (Admin, Senior Engineer)')
+  console.log('  - carol@example.com (Member, completed all quests)')
+  console.log('  - david@example.com (Member, actively onboarding)')
+  console.log('  - emma@example.com (Owner of E-commerce team)')
+
+  console.log('\n🎯 Try These Features:')
+  console.log('  1. View teams: /teams')
+  console.log('  2. View David\'s progress: /members/{david-id}')
+  console.log('  3. View the onboarding guide: /guides/{guide-id}')
+  console.log('  4. Explore quest templates: /templates')
+  console.log('  5. Run CLI: npm run cli stats')
+  console.log('  6. Run CLI: npm run cli progress:report')
+  console.log('')
 }
 
 main()

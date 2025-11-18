@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TeamSpace {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  repos   RepoLink[]
+  guides  OnboardingGuide[]
+
+  @@map("team_spaces")
+}
+
+model RepoLink {
+  id        String   @id @default(cuid())
+  teamId    String
+  githubUrl String
+  role      String   // api, frontend, backend, etc
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team TeamSpace @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("repo_links")
+}
+
+model OnboardingGuide {
+  id           String   @id @default(cuid())
+  teamId       String
+  title        String
+  targetRole   String   // junior, senior, ops, etc
+  markdownBody String   @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team   TeamSpace @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  quests Quest[]
+
+  @@map("onboarding_guides")
+}
+
+model Quest {
+  id                  String   @id @default(cuid())
+  guideId             String
+  title               String
+  descriptionMarkdown String   @db.Text
+  estimatedHours      Int
+  tagsJson            String   @db.Text // Store as JSON string
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  guide OnboardingGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@map("quests")
+}

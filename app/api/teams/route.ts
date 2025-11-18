@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { successResponse, handleApiError } from '@/lib/api-response'
 
 const createTeamSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, 'Team name is required'),
   description: z.string().optional(),
 })
 
@@ -23,13 +24,9 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json({ teams })
+    return successResponse({ teams })
   } catch (error) {
-    console.error('Error fetching teams:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch teams' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
 
@@ -46,19 +43,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ team }, { status: 201 })
+    return successResponse({ team }, 201)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    console.error('Error creating team:', error)
-    return NextResponse.json(
-      { error: 'Failed to create team' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

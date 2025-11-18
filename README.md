@@ -4,227 +4,262 @@ Auto-generate personalized onboarding guides and quests for new team members bas
 
 ## Overview
 
-This tool helps engineering teams create comprehensive, AI-powered onboarding experiences for new developers. Simply link your repositories, and the system will:
+This tool helps engineering teams create comprehensive, AI-powered onboarding experiences for new developers. The system analyzes your GitHub repositories and generates:
 
-- Analyze your codebase structure, READMEs, and key files
-- Generate tailored 2-week onboarding plans
-- Create hands-on "quests" (tasks) for developers to complete
-- Customize content based on role (junior, senior, ops, etc.)
+- Tailored 2-week onboarding plans customized by role (junior, senior, ops, etc.)
+- Hands-on "quests" - structured learning tasks with clear objectives
+- Repository insights extracted from READMEs, code structure, and dependencies
+- Role-specific content that adapts to the new developer's experience level
+
+**Status**: Phase 2 - Working vertical slice with Docker, tests, and seed data
 
 ## Tech Stack
 
 - **Frontend & Backend**: Next.js 14+ (App Router) with TypeScript
-- **Database**: PostgreSQL with Prisma ORM
-- **AI**: OpenAI GPT-4o for guide generation
-- **GitHub Integration**: Octokit for repository analysis
-- **Styling**: Tailwind CSS
+- **Database**: PostgreSQL 15+ with Prisma ORM
+- **AI**: OpenAI GPT-4o for intelligent guide generation
+- **GitHub Integration**: Octokit REST API for repository analysis
+- **Styling**: Tailwind CSS 4
+- **Testing**: Vitest with comprehensive test coverage
+- **DevOps**: Docker Compose for local development
 
-## Features
+## Domain Model
 
-### 1. Team Spaces
-Organize repositories and guides by team or project area.
+The system uses four core entities:
 
-### 2. Repository Analysis
-- Automatically fetches README files
-- Analyzes project structure and key folders
-- Extracts package.json metadata
-- Identifies main languages and topics
+```
+TeamSpace
+├── id, name, description
+├── repos[] ────> RepoLink (githubUrl, role)
+└── guides[] ───> OnboardingGuide
+                  ├── id, title, targetRole, markdownBody
+                  └── quests[] ───> Quest
+                                    ├── id, title, descriptionMarkdown
+                                    ├── estimatedHours
+                                    └── tagsJson
+```
 
-### 3. AI-Powered Guide Generation
-- Creates customized onboarding paths
-- Generates role-specific content (junior, senior, ops, etc.)
-- Produces actionable quests with clear objectives
-- Includes time estimates for each task
-
-### 4. Quest System
-Interactive learning tasks that guide new developers through:
-- Environment setup
-- Codebase exploration
-- First contributions
-- Architecture understanding
-- Team integration
+**Relationships:**
+- A `TeamSpace` organizes multiple GitHub `RepoLink`s
+- Each `OnboardingGuide` belongs to a team and contains multiple `Quest`s
+- Quests are actionable learning tasks with time estimates and tags
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
-- Node.js 18+ and npm
-- PostgreSQL database
-- OpenAI API key
-- (Optional) GitHub personal access token for private repos
+- **Node.js** 18+ and npm
+- **Docker** and Docker Compose (for local PostgreSQL)
+- **OpenAI API Key** (required for guide generation)
+- **GitHub Token** (optional, for private repositories)
 
-### Installation
+### Setup Steps
 
-1. **Clone the repository**
+1. **Clone and install dependencies**
    ```bash
    git clone https://github.com/yourusername/developer-onboarding-guide-builder.git
    cd developer-onboarding-guide-builder
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Set up environment variables**
+2. **Configure environment**
    ```bash
    cp .env.example .env
    ```
 
-   Edit `.env` with your configuration:
+   Edit `.env` and add your OpenAI API key:
    ```env
-   # Database
-   DATABASE_URL="postgresql://user:password@localhost:5432/onboarding_builder?schema=public"
-
-   # OpenAI
-   OPENAI_API_KEY="sk-..."
-
-   # GitHub (optional - for private repos)
-   GITHUB_TOKEN=""
-
-   # App
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/onboarding_builder?schema=public"
+   OPENAI_API_KEY="sk-your-openai-api-key-here"  # Required!
+   GITHUB_TOKEN=""  # Optional
    NEXT_PUBLIC_APP_URL="http://localhost:3000"
    ```
 
-4. **Set up the database**
+3. **Start PostgreSQL with Docker**
    ```bash
-   npx prisma generate
-   npx prisma db push
+   npm run docker:dev
    ```
 
-5. **Run the development server**
+4. **Set up database and seed data**
+   ```bash
+   npm run db:push    # Create database schema
+   npm run db:seed    # Load example data
+   ```
+
+5. **Start the development server**
    ```bash
    npm run dev
    ```
 
-6. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+6. **Open the application**
 
-## Usage Example: Shift Scheduler Ecosystem
+   Visit [http://localhost:3000](http://localhost:3000)
 
-Let's walk through onboarding a new developer to a fictional "Shift Scheduler" system with multiple repositories.
+### Verify Setup
 
-### Step 1: Create a Team Space
+Run the test suite to verify everything works:
 
+```bash
+npm test
+```
+
+All tests should pass (17 passing tests).
+
+## Example Flow - Complete Vertical Slice
+
+This section demonstrates the complete working flow from creating a team to viewing generated onboarding guides.
+
+### 1. View Seeded Data
+
+After running `npm run db:seed`, the database contains example teams:
+
+- **Shift Scheduler Team** - Healthcare shift scheduling platform (with complete onboarding guide)
+- **E-commerce Platform Team** - Modern e-commerce platform
+
+Navigate to http://localhost:3000/teams to see all teams.
+
+### 2. Create a New Team
+
+**UI Flow:**
 1. Go to `/teams`
 2. Click "Create Team"
-3. Enter:
-   - **Name**: Shift Scheduler Team
-   - **Description**: Healthcare shift scheduling platform with microservices architecture
+3. Enter team name and description
+4. Submit
 
-### Step 2: Add Repositories
+**API Endpoint:**
+```bash
+POST /api/teams
+Content-Type: application/json
 
-Add the following repositories (examples):
+{
+  "name": "Your Team Name",
+  "description": "Optional description"
+}
+```
 
-| Repository URL | Role |
-|---------------|------|
-| `https://github.com/your-org/shift-scheduler-api` | backend |
-| `https://github.com/your-org/shift-scheduler-web` | frontend |
-| `https://github.com/your-org/shift-scheduler-mobile` | mobile |
-| `https://github.com/your-org/shift-scheduler-docs` | documentation |
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "team": {
+      "id": "clx...",
+      "name": "Your Team Name",
+      "description": "...",
+      "repos": [],
+      "guides": []
+    }
+  }
+}
+```
 
-### Step 3: Generate Onboarding Guide
+### 3. Add Repositories
 
-1. Click the "Onboarding Guides" tab
+**UI Flow:**
+1. Click on your team
+2. Go to "Repositories" tab
+3. Click "Add Repository"
+4. Enter GitHub URL (e.g., `https://github.com/facebook/react`)
+5. Specify role (e.g., `frontend`, `backend`, `api`)
+
+**API Endpoint:**
+```bash
+POST /api/teams/:teamId/repos
+Content-Type: application/json
+
+{
+  "githubUrl": "https://github.com/facebook/react",
+  "role": "frontend"
+}
+```
+
+### 4. Generate Onboarding Guide
+
+**UI Flow:**
+1. Switch to "Onboarding Guides" tab
 2. Click "Generate New Guide"
-3. Select target role (e.g., "Junior Developer")
-4. Click "Generate Guide"
+3. Select target role (junior, senior, ops, etc.)
+4. Click "Generate Guide" (takes 30-60 seconds)
 
-The system will:
-- Fetch and analyze all 4 repositories
-- Read READMEs and key files
-- Generate a comprehensive 2-week onboarding plan
-- Create 5-8 hands-on quests
+**What Happens:**
+- System fetches repository data via GitHub API
+- Analyzes README files, folder structure, package.json
+- Sends repository context to OpenAI GPT-4o
+- Generates customized 2-week onboarding plan
+- Creates 5-8 hands-on quests automatically
 
-### Step 4: Review Generated Content
+**API Endpoint:**
+```bash
+POST /api/teams/:teamId/guides/generate
+Content-Type: application/json
 
-The generated guide might include:
+{
+  "targetRole": "junior"
+}
+```
 
-**Week 1: Foundation & Setup**
-- Day 1-2: Environment setup, running local services
-- Day 3-4: Understanding the shift scheduling domain
-- Day 5: Architecture overview and API exploration
+### 5. View Guide and Quests
 
-**Week 2: Hands-On Development**
-- Day 1-2: First bug fix in the backend API
-- Day 3-4: Add a small feature to the frontend
-- Day 5: Code review and team integration
+**UI Flow:**
+1. Click on the generated guide
+2. Read the markdown onboarding plan
+3. Expand individual quests to see details
 
-**Example Quests:**
+**Guide Structure:**
+```markdown
+# Week 1: Foundation & Setup
+- Days 1-2: Environment setup
+- Days 3-4: Domain understanding
+- Day 5: Architecture overview
 
-1. **Quest: "Set Up Your Development Environment"**
-   - Install Docker, Node.js, PostgreSQL
-   - Clone all 4 repositories
-   - Run services locally
-   - Verify with health check endpoints
-   - *Estimated: 4 hours*
-   - *Tags: setup, docker, api*
+# Week 2: Hands-On Development
+- Days 1-2: First contributions
+- Days 3-4: Feature implementation
+- Day 5: Team integration
+```
 
-2. **Quest: "Understand the Shift Model"**
-   - Read the domain documentation
-   - Explore the Shift model in the API
-   - Write a test that creates a shift
-   - Document your understanding
-   - *Estimated: 3 hours*
-   - *Tags: domain, backend, testing*
+**Quest Details:**
+- Title and description
+- Estimated hours (e.g., 4 hours)
+- Tags (e.g., `setup`, `testing`, `backend`)
+- Step-by-step instructions
 
-3. **Quest: "Fix Your First Bug"**
-   - Pick a "good first issue" from GitHub
-   - Create a feature branch
-   - Implement the fix with tests
-   - Submit a pull request
-   - *Estimated: 6 hours*
-   - *Tags: bug-fix, git, testing*
+### 6. Example: Shift Scheduler Guide
 
-## API Reference
+The seeded database includes a complete example guide at:
 
-### Teams
+`/teams/<team-id>/` → Click "Onboarding Guides" → "Junior Developer Onboarding - Shift Scheduler Team"
 
-**GET** `/api/teams`
-- List all team spaces
+This guide includes 5 quests:
+1. **Set Up Your Development Environment** (4 hours)
+2. **Understand the Shift Model** (3 hours)
+3. **Fix Your First Bug** (6 hours)
+4. **Add a Small Feature to the UI** (5 hours)
+5. **Learn the Deployment Process** (3 hours)
 
-**POST** `/api/teams`
-- Create a new team
-- Body: `{ name: string, description?: string }`
+**Total onboarding time**: ~21 hours across 2 weeks
 
-**GET** `/api/teams/:id`
-- Get team details with repos and guides
+## Available Scripts
 
-**PATCH** `/api/teams/:id`
-- Update team information
-
-**DELETE** `/api/teams/:id`
-- Delete a team (cascades to repos and guides)
-
-### Repositories
-
-**GET** `/api/teams/:teamId/repos`
-- List repositories for a team
-
-**POST** `/api/teams/:teamId/repos`
-- Add a repository to a team
-- Body: `{ githubUrl: string, role: string }`
-
-**DELETE** `/api/repos/:id`
-- Remove a repository
-
-### Guides
-
-**GET** `/api/teams/:teamId/guides`
-- List onboarding guides for a team
-
-**POST** `/api/teams/:teamId/guides/generate`
-- Generate a new onboarding guide
-- Body: `{ targetRole: string }`
-- This triggers repository analysis and LLM generation
-
-**GET** `/api/guides/:id`
-- Get guide details with quests
-
-**DELETE** `/api/guides/:id`
-- Delete a guide
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server (http://localhost:3000) |
+| `npm run build` | Build for production |
+| `npm start` | Start production server |
+| `npm test` | Run test suite |
+| `npm run lint` | Run ESLint |
+| `npm run type-check` | Run TypeScript type checking |
+| `npm run db:push` | Push Prisma schema to database |
+| `npm run db:migrate` | Create migration from schema changes |
+| `npm run db:seed` | Seed database with example data |
+| `npm run db:studio` | Open Prisma Studio (database GUI) |
+| `npm run docker:dev` | Start PostgreSQL in Docker |
+| `npm run docker:dev:down` | Stop PostgreSQL container |
+| `npm run docker:up` | Build and start full app with Docker Compose |
 
 ## Database Schema
+
+See the complete schema in `prisma/schema.prisma`:
 
 ```prisma
 model TeamSpace {
@@ -248,7 +283,7 @@ model OnboardingGuide {
   teamId       String
   title        String
   targetRole   String   // junior, senior, ops, etc
-  markdownBody String
+  markdownBody String   @db.Text
   team         TeamSpace @relation(...)
   quests       Quest[]
 }
@@ -257,9 +292,9 @@ model Quest {
   id                  String   @id @default(cuid())
   guideId             String
   title               String
-  descriptionMarkdown String
+  descriptionMarkdown String   @db.Text
   estimatedHours      Int
-  tagsJson            String   // Stored as JSON
+  tagsJson            String   @db.Text
   guide               OnboardingGuide @relation(...)
 }
 ```
@@ -267,119 +302,141 @@ model Quest {
 ## Architecture
 
 ### Repository Analyzer (`lib/repo-analyzer.ts`)
-- Uses Octokit to interact with GitHub API
-- Fetches README, package.json, and directory structure
-- Handles public and private repositories
-- Returns structured `RepoSummary` objects
+- Fetches repository data from GitHub API
+- Extracts README, package.json, folder structure
+- Returns structured `RepoSummary` for LLM processing
 
 ### Guide Generator (`lib/guide-generator.ts`)
-- Integrates with OpenAI GPT-4o
-- Takes repository summaries as context
-- Generates onboarding plans in structured JSON
-- Creates quests with objectives, steps, and time estimates
+- Takes repository summaries as input
+- Constructs detailed prompts for OpenAI
+- Generates 2-week onboarding plans with quests
+- Returns structured JSON with guides and quests
 
-### API Routes (`app/api/...`)
-- RESTful endpoints using Next.js Route Handlers
-- Input validation with Zod
-- Proper error handling and status codes
+### API Layer (`app/api/`)
+- RESTful endpoints with consistent error handling
+- Input validation using Zod schemas
+- Centralized error responses (`lib/api-response.ts`)
 - Database operations via Prisma
 
-### UI (`app/...`)
+### UI Layer (`app/`)
 - Server and client components
 - Responsive design with Tailwind CSS
-- Markdown rendering for guides and quests
-- Interactive forms and real-time updates
+- Markdown rendering with react-markdown
+- Real-time form handling and updates
 
-## Development
+## Testing
 
-### Generate Prisma Client
+Run the test suite:
+
 ```bash
-npx prisma generate
+npm test                 # Run all tests
+npm run test:watch       # Watch mode
+npm run test:ui          # Open Vitest UI
 ```
 
-### Database Migrations
-```bash
-npx prisma migrate dev --name your_migration_name
-```
-
-### Prisma Studio (Database GUI)
-```bash
-npx prisma studio
-```
-
-### Type Checking
-```bash
-npm run type-check
-```
-
-### Build for Production
-```bash
-npm run build
-npm start
-```
+**Test Coverage:**
+- API response utilities (error handling, success responses)
+- Data structure validation (guides, quests, repositories)
+- Zod schema validation
+- Prisma error handling
 
 ## Deployment
 
-### Environment Variables
-Ensure these are set in your production environment:
-- `DATABASE_URL` - PostgreSQL connection string
-- `OPENAI_API_KEY` - Your OpenAI API key
-- `GITHUB_TOKEN` - (Optional) For private repo access
-- `NEXT_PUBLIC_APP_URL` - Your production URL
+### Docker Production Build
 
-### Recommended Platforms
-- **Vercel**: Easiest deployment for Next.js
-- **Railway/Render**: Good for full-stack with PostgreSQL
-- **AWS/GCP**: For enterprise deployments
+```bash
+# Build and start with Docker Compose
+npm run docker:up
 
-### Database
-- Use a managed PostgreSQL service (Supabase, Neon, Railway, etc.)
-- Run migrations: `npx prisma migrate deploy`
-
-## Customization
-
-### Adding New Target Roles
-Edit `app/teams/[id]/page.tsx` to add more role options:
-```tsx
-<option value="custom-role">Custom Role</option>
+# The app will be available at http://localhost:3000
 ```
 
-### Adjusting LLM Prompts
-Modify `lib/guide-generator.ts` to customize:
-- Onboarding duration (default: 2 weeks)
-- Quest complexity
-- Content focus areas
+### Environment Variables
 
-### Styling
-- Edit `tailwind.config.ts` for theme customization
-- Update color schemes in component files
+Ensure these are set in production:
+
+```env
+DATABASE_URL=postgresql://user:pass@host:5432/onboarding_builder
+OPENAI_API_KEY=sk-...
+GITHUB_TOKEN=ghp_...  # Optional
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+```
+
+### Platforms
+
+- **Vercel**: Deploy Next.js app + Vercel Postgres
+- **Railway/Render**: Full-stack with PostgreSQL
+- **AWS/GCP**: Enterprise deployments with RDS/Cloud SQL
+
+## Future Extensions
+
+- [ ] **Quest Progress Tracking**: Track which quests team members have completed
+- [ ] **Team Member Accounts**: User authentication and role management
+- [ ] **Custom Quest Builder**: UI for manually creating and editing quests
+- [ ] **Markdown Export**: Download guides as standalone markdown files
+- [ ] **Integration with Slack/Discord**: Notify team when onboarding milestones are reached
+- [ ] **Analytics Dashboard**: Track onboarding completion rates and time
+- [ ] **Multi-Repository Support**: Analyze monorepos with multiple workspaces
+- [ ] **GitLab & Bitbucket**: Support beyond GitHub
+- [ ] **AI Model Selection**: Support for Claude, Gemini, or local LLMs
+- [ ] **Quest Templates**: Reusable quest templates across teams
+- [ ] **Onboarding Feedback**: Collect feedback from new developers
+- [ ] **Automated Updates**: Re-generate guides when repos change significantly
+
+## Contributing
+
+Contributions welcome! To contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`npm test`)
+5. Commit with clear messages (`git commit -m 'Add amazing feature'`)
+6. Push to your fork (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## Troubleshooting
 
 ### Database Connection Issues
-- Verify `DATABASE_URL` is correct
-- Ensure PostgreSQL is running
-- Check firewall/network settings
+
+```bash
+# Verify PostgreSQL is running
+docker ps | grep postgres
+
+# Restart database
+npm run docker:dev:down
+npm run docker:dev
+
+# Reset database completely
+npm run db:reset
+npm run db:seed
+```
 
 ### OpenAI API Errors
-- Confirm `OPENAI_API_KEY` is valid
-- Check API quota and billing
-- Review rate limits
+
+- **Missing API Key**: Ensure `OPENAI_API_KEY` is set in `.env`
+- **Rate Limits**: Wait a few seconds and try again
+- **Invalid Model**: Verify you have access to GPT-4o
 
 ### GitHub API Rate Limits
-- Use `GITHUB_TOKEN` for higher limits
-- Implement caching for repeated requests
-- Consider repository analysis throttling
 
-## Contributing
+- **Without Token**: 60 requests/hour
+- **With Token**: 5000 requests/hour
+- **Solution**: Add `GITHUB_TOKEN` to `.env`
 
-Contributions are welcome! Please:
+### Build Errors
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+# Clear Next.js cache
+rm -rf .next
+
+# Regenerate Prisma client
+npm run db:generate
+
+# Reinstall dependencies
+rm -rf node_modules package-lock.json
+npm install
+```
 
 ## License
 
@@ -387,22 +444,12 @@ MIT License - see LICENSE file for details
 
 ## Support
 
-For issues and questions:
-- Open a GitHub issue
-- Check existing documentation
-- Review API error messages
-
-## Roadmap
-
-- [ ] Markdown export for guides
-- [ ] Quest progress tracking
-- [ ] Team member accounts
-- [ ] Integration with Slack/Discord
-- [ ] Custom quest creation UI
-- [ ] Analytics dashboard
-- [ ] Support for GitLab and Bitbucket
-- [ ] Multi-language support
+- **GitHub Issues**: Report bugs or request features
+- **Documentation**: Check this README and inline code comments
+- **Prisma Studio**: Explore the database with `npm run db:studio`
 
 ---
 
-Built with ❤️ for developer onboarding
+**Built with ❤️ for better developer onboarding**
+
+Phase 2 Complete ✅ - Working vertical slice with comprehensive testing and Docker support
